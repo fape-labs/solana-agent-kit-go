@@ -7,8 +7,8 @@ An **open-source Golang toolkit** designed to connect AI agents to Solana protoc
 - **Jupiter Swap Integration**  
   Perform token swaps autonomously using the Jupiter protocol.
 
-- **Pump-Fund Actions**  
-  Automate liquidity or funding actions to interact seamlessly with Solana protocols.
+- **Pump Fun Actions**  
+  Automate token launches and trade directly through pump.fun protocol.
 
 - **Extendable Framework**  
   Additional actions and integrations are in progress! The toolkit is built with extensibility in mind, allowing contributors to add new features easily.
