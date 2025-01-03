@@ -39,11 +39,22 @@ Want to contribute? We'd love your help! Here's how:
    Fork the repository, implement your feature, and submit a pull request.
 
 4. **Documentation**:  
-   Please include detailed documentation and test cases for any new features you add.
+   Please include detailed documentation and test cases for any new features you add
+
+## Contributors
+
+<a href="https://github.com/fape-labs/solana-agent-kit-go/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=fape-labs/solana-agent-kit-go" />
+</a>
+
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=fape-labs/solana-agent-kit-go&type=Date)](https://star-history.com/#fape-labs/solana-agent-kit-go&Date)
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details. 
 
 ## 🌟 Join the Community
 
