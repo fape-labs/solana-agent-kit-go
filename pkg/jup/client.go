@@ -3,27 +3,34 @@ package jup
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fape-labs/solana-agent-kit-go/pkg/solanaclient"
+	"github.com/fape-labs/solana-agent-kit-go/pkg/kit"
 	"github.com/gagliardetto/solana-go"
 	"github.com/valyala/fasthttp"
 )
 
 type JupClient struct {
 	BaseUrl string
+	agent   kit.Agent
 }
 
-func (jc *JupClient) Swap(client *solanaclient.Client, signer solana.PrivateKey, inputMint solana.PublicKey, outputMint solana.PublicKey, amount uint64, slippageBps int) (*solana.Signature, error) {
+func NewJupClient(agent kit.Agent) *JupClient {
+	return &JupClient{
+		agent: agent,
+	}
+}
+
+func (jc *JupClient) Swap(inputMint solana.PublicKey, outputMint solana.PublicKey, amount uint64, slippageBps int) (*solana.Signature, error) {
 	qr, err := jc.GetQuote(inputMint, outputMint, amount, slippageBps)
 	if err != nil {
 		return nil, err
 	}
 
-	sr, err := jc.GetSwapTx(signer, qr)
+	sr, err := jc.GetSwapTx(qr)
 	if err != nil {
 		return nil, err
 	}
 
-	return client.SignAndSendTx(sr.SwapTransaction)
+	return jc.agent.RPC().SignAndSendTx(sr.SwapTransaction)
 }
 
 func (jc *JupClient) GetQuote(inputMint solana.PublicKey, outputMint solana.PublicKey, amount uint64, slippageBps int) (*QuoteReseponse, error) {
@@ -51,10 +58,10 @@ func (jc *JupClient) GetQuote(inputMint solana.PublicKey, outputMint solana.Publ
 	return juqQuoteResp, nil
 }
 
-func (jc *JupClient) GetSwapTx(signer solana.PrivateKey, q *QuoteReseponse) (*JupTxResponse, error) {
+func (jc *JupClient) GetSwapTx(q *QuoteReseponse) (*JupTxResponse, error) {
 	swapReqObj := map[string]any{
 		"quoteResponse":             q,
-		"userPublicKey":             signer.PublicKey().String(),
+		"userPublicKey":             jc.agent.Signer().PublicKey().String(),
 		"wrapAndUnwrapSol":          true,
 		"dynamicComputeUnitLimit":   true,
 		"prioritizationFeeLamports": 20000,
@@ -86,18 +93,18 @@ func (jc *JupClient) GetSwapTx(signer solana.PrivateKey, q *QuoteReseponse) (*Ju
 	return r, nil
 }
 
-func (jc *JupClient) GetSwapIx(signer solana.PrivateKey, q *QuoteReseponse) (*InstructionResponse, error) {
+func (jc *JupClient) GetSwapIx(q *QuoteReseponse) (*InstructionResponse, error) {
 	//
 	swapReqObj := map[string]any{
 		"quoteResponse":             q,
-		"userPublicKey":             signer.PublicKey().String(),
+		"userPublicKey":             jc.agent.Signer().PublicKey().String(),
 		"wrapAndUnwrapSol":          true,
 		"dynamicComputeUnitLimit":   true,
 		"prioritizationFeeLamports": 20000,
 	}
 
 	swapReq := fasthttp.AcquireRequest()
-	swapReq.SetRequestURI(fmt.Sprintf("%/swap-instructions", jc.BaseUrl))
+	swapReq.SetRequestURI(fmt.Sprintf("%s/swap-instructions", jc.BaseUrl))
 	swapReq.Header.SetContentType("application/json")
 	swapReq.Header.SetMethod(fasthttp.MethodPost)
 	httpBody, err := json.Marshal(swapReqObj)

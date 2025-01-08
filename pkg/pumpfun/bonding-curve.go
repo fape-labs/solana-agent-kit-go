@@ -22,8 +22,8 @@ func (b *BondingCurveData) String() string {
 }
 
 // fetchBondingCurve fetches the bonding curve data from the blockchain and decodes it.
-func fetchBondingCurve(rpcClient *rpc.Client, bondingCurvePubKey solana.PublicKey) (*BondingCurveData, error) {
-	accountInfo, err := rpcClient.GetAccountInfoWithOpts(context.TODO(), bondingCurvePubKey, &rpc.GetAccountInfoOpts{Encoding: solana.EncodingBase64, Commitment: rpc.CommitmentProcessed})
+func (c *Client) fetchBondingCurve(bondingCurvePubKey solana.PublicKey) (*BondingCurveData, error) {
+	accountInfo, err := c.agent.RPC().RPC.GetAccountInfoWithOpts(context.TODO(), bondingCurvePubKey, &rpc.GetAccountInfoOpts{Encoding: solana.EncodingBase64, Commitment: rpc.CommitmentProcessed})
 	if err != nil || accountInfo.Value == nil {
 		return nil, fmt.Errorf("FBCD: failed to get account info: %w", err)
 	}

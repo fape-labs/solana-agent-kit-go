@@ -9,8 +9,6 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	confirm "github.com/gagliardetto/solana-go/rpc/sendAndConfirmTransaction"
-	"github.com/gagliardetto/solana-go/rpc/ws"
-
 	// This package interacts with the Compute Budget program, allowing
 	// to easily get instruction to set compute budget limit/price for example.
 	cb "github.com/gagliardetto/solana-go/programs/compute-budget"
@@ -97,7 +95,7 @@ func getComputUnitPriceInstr(rpcClient *rpc.Client, user solana.PrivateKey) (*cb
 	return cupInst, nil
 }
 
-func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKey, mint *solana.Wallet, name string, symbol string, uri string, buyAmountSol float64, percentage float64) (string, error) {
+func (c *Client) CreateToken(mint *solana.Wallet, name string, symbol string, uri string, buyAmountSol float64, percentage float64) (string, error) {
 	bondingCurveData, err := getBondingCurveAndAssociatedBondingCurve(mint.PublicKey())
 	if err != nil {
 		return "", fmt.Errorf("failed to get bonding curve and associated bonding curve: %w", err)
@@ -110,7 +108,7 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 
 	// Default pumpidl.fun compute limit is 250k, so we set the same here.
 	culInst := cb.NewSetComputeUnitLimitInstruction(uint32(250000))
-	cupInst, err := getComputUnitPriceInstr(rpcClient, user)
+	cupInst, err := getComputUnitPriceInstr(c.agent.RPC().RPC, c.agent.Signer())
 	if err != nil {
 		return "", fmt.Errorf("failed to get compute unit price instructions: %w", err)
 	}
@@ -126,7 +124,7 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 		globalPumpFunAddress,
 		solana.TokenMetadataProgramID,
 		metadata,
-		user.PublicKey(),
+		c.agent.Signer().PublicKey(),
 		system.ProgramID,
 		token.ProgramID,
 		associatedtokenaccount.ProgramID,
@@ -136,7 +134,7 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 	)
 	instruction := instr.Build()
 	// get recent block hash
-	recent, err := rpcClient.GetLatestBlockhash(context.TODO(), rpc.CommitmentFinalized)
+	recent, err := c.agent.RPC().RPC.GetLatestBlockhash(context.TODO(), rpc.CommitmentFinalized)
 	if err != nil {
 		return "", fmt.Errorf("error while getting recent block hash: %w", err)
 	}
@@ -147,7 +145,7 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 	}
 	// get buy instructions
 	if buyAmountSol > 0 {
-		buyInstructions, err := getBuyInstructions(rpcClient, mint.PublicKey(), user.PublicKey(), SolToLamp(buyAmountSol), percentage)
+		buyInstructions, err := c.getBuyInstructions(mint.PublicKey(), c.agent.Signer().PublicKey(), SolToLamp(buyAmountSol), percentage)
 		if err != nil {
 			return "", fmt.Errorf("failed to get buy instructions: %w", err)
 		}
@@ -156,15 +154,16 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 	tx, err := solana.NewTransaction(
 		instructions,
 		recent.Value.Blockhash,
-		solana.TransactionPayer(user.PublicKey()),
+		solana.TransactionPayer(c.agent.Signer().PublicKey()),
 	)
 	if err != nil {
 		return "", fmt.Errorf("error while creating new transaction: %w", err)
 	}
 	_, err = tx.Sign(
 		func(key solana.PublicKey) *solana.PrivateKey {
-			if user.PublicKey().Equals(key) {
-				return &user
+			if c.agent.Signer().PublicKey().Equals(key) {
+				signer := c.agent.Signer()
+				return &signer
 			}
 			if mint.PublicKey().Equals(key) {
 				return &mint.PrivateKey
@@ -178,8 +177,8 @@ func CreateToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.Private
 	// Send transaction, and wait for confirmation:
 	sig, err := confirm.SendAndConfirmTransaction(
 		context.TODO(),
-		rpcClient,
-		wsClient,
+		c.agent.RPC().RPC,
+		c.agent.RPC().WS,
 		tx,
 	)
 	if err != nil {

@@ -14,10 +14,9 @@ import (
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
 	confirm "github.com/gagliardetto/solana-go/rpc/sendAndConfirmTransaction"
-	"github.com/gagliardetto/solana-go/rpc/ws"
 )
 
-func SellToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKey, mint solana.PublicKey, sellTokenAmount uint64, percentage float64, all bool) (string, error) {
+func (c *Client) SellToken(mint solana.PublicKey, sellTokenAmount uint64, percentage float64, all bool) (string, error) {
 	// create priority fee instructions
 	culInst := cb.NewSetComputeUnitLimitInstruction(uint32(250000))
 	cupInst := cb.NewSetComputeUnitPriceInstruction(uint64(10000))
@@ -26,13 +25,13 @@ func SellToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKe
 		cupInst.Build(),
 	}
 	// get sell instructions
-	sellInstructions, err := getSellInstructions(rpcClient, user, mint, sellTokenAmount, percentage, all)
+	sellInstructions, err := c.getSellInstructions(mint, sellTokenAmount, percentage, all)
 	if err != nil {
 		return "", fmt.Errorf("failed to get sell instructions: %w", err)
 	}
 	instructions = append(instructions, sellInstructions)
 	// get recent block hash
-	recent, err := rpcClient.GetLatestBlockhash(context.TODO(), rpc.CommitmentFinalized)
+	recent, err := c.agent.RPC().RPC.GetLatestBlockhash(context.TODO(), rpc.CommitmentFinalized)
 	if err != nil {
 		return "", fmt.Errorf("error while getting recent block hash: %w", err)
 	}
@@ -40,14 +39,15 @@ func SellToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKe
 	tx, err := solana.NewTransaction(
 		instructions,
 		recent.Value.Blockhash,
-		solana.TransactionPayer(user.PublicKey()),
+		solana.TransactionPayer(c.agent.Signer().PublicKey()),
 	)
 	if err != nil {
 		return "", fmt.Errorf("error while creating new transaction: %w", err)
 	}
 	_, err = tx.Sign(
 		func(key solana.PublicKey) *solana.PrivateKey {
-			if user.PublicKey().Equals(key) {
+			if c.agent.Signer().PublicKey().Equals(key) {
+				user := c.agent.Signer()
 				return &user
 			}
 			return nil
@@ -60,8 +60,8 @@ func SellToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKe
 	// Send transaction, and wait for confirmation:
 	sig, err := confirm.SendAndConfirmTransaction(
 		context.TODO(),
-		rpcClient,
-		wsClient,
+		c.agent.RPC().RPC,
+		c.agent.RPC().WS,
 		tx,
 	)
 	if err != nil {
@@ -71,16 +71,16 @@ func SellToken(rpcClient *rpc.Client, wsClient *ws.Client, user solana.PrivateKe
 }
 
 // getSellInstructions is a function that returns the pumpidl.fun instructions to sell the token
-func getSellInstructions(rpcClient *rpc.Client, user solana.PrivateKey, mint solana.PublicKey, sellTokenAmount uint64, percentage float64, all bool) (*pumpidl.Instruction, error) {
+func (c *Client) getSellInstructions(mint solana.PublicKey, sellTokenAmount uint64, percentage float64, all bool) (*pumpidl.Instruction, error) {
 	ata, _, err := solana.FindAssociatedTokenAddress(
-		user.PublicKey(),
+		c.agent.Signer().PublicKey(),
 		mint,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive associated token account: %w", err)
 	}
 	if all {
-		tokenAccounts, err := rpcClient.GetTokenAccountBalance(context.TODO(), ata, rpc.CommitmentConfirmed)
+		tokenAccounts, err := c.agent.RPC().RPC.GetTokenAccountBalance(context.TODO(), ata, rpc.CommitmentConfirmed)
 		if err != nil {
 			return nil, fmt.Errorf("can't get amount of token in balance: %w", err)
 		}
@@ -94,7 +94,7 @@ func getSellInstructions(rpcClient *rpc.Client, user solana.PrivateKey, mint sol
 	if err != nil {
 		return nil, fmt.Errorf("can't get bonding curve data: %w", err)
 	}
-	bondingCurve, err := fetchBondingCurve(rpcClient, bondingCurveData.BondingCurve)
+	bondingCurve, err := c.fetchBondingCurve(bondingCurveData.BondingCurve)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch bonding curve: %w", err)
 	}
@@ -109,7 +109,7 @@ func getSellInstructions(rpcClient *rpc.Client, user solana.PrivateKey, mint sol
 		bondingCurveData.BondingCurve,
 		bondingCurveData.AssociatedBondingCurve,
 		ata,
-		user.PublicKey(),
+		c.agent.Signer().PublicKey(),
 		system.ProgramID,
 		associatedtokenaccount.ProgramID,
 		token.ProgramID,
